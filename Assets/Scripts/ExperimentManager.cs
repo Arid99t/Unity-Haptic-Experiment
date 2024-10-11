@@ -11,13 +11,12 @@ public class ExperimentManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI[] instructionTexts;
     [SerializeField] private TextMeshProUGUI stepText;
     [SerializeField] private TextMeshProUGUI roundText;
-    [SerializeField] private LineRenderer[] lineRenderers;
+    [SerializeField] private GameObject[] cubeObjects; // Replaced LineRenderer[] with GameObject[]
     [SerializeField] private GameObject hand;
     [SerializeField] private GameObject cube;
     [SerializeField] private BoxDeformer boxDeformer;
     [SerializeField] private PressureSensor pressureSensor;
     [SerializeField] private Transform cubePoint;
-    [SerializeField] private Transform refPt;
     [SerializeField] private float maxDistance = 0.1f;
     [SerializeField] private float refLineStartX = 3.1f;
 
@@ -33,7 +32,7 @@ public class ExperimentManager : MonoBehaviour
     private ExperimentState currentState;
     private int currentRound = 0;
     private int currentStep = 0;
-    private GameObject currentLine;
+    private GameObject currentCube; // Replaced currentLine with currentCube
     private int experimentIteration = 1;
     private float materialConstant = 1f;
     private float targetDistance;
@@ -42,11 +41,16 @@ public class ExperimentManager : MonoBehaviour
     private const int UdpSendPort = 8893;
     private string csvFilePath;
 
+    // Simplified target compressions using an array
+    private readonly float[] targetCompressions = { 0.68794f, 0.66001f, 0.62448f, 0.57949f, 0.54304f, 0.49568f, 0.45790f, 0.42509f, 0.39034f, 0.34864f };
+
+    private float stepStartTime; // New variable to track the start time of each step
+
     private void Start()
     {
         InitializeUdpClient();
         InitializeCsvFile();
-        HideAllLines();
+        HideAllCubes(); // Updated method name
         SetState(ExperimentState.Welcome);
         UpdateStepAndRoundText();
     }
@@ -65,7 +69,7 @@ public class ExperimentManager : MonoBehaviour
         string fileName = $"ExperimentData_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
         csvFilePath = Path.Combine(desktopPath, fileName);
 
-        string header = "Iteration,Round,Step,Phase,Pressure,Time,Distance,Accuracy,CubePointX,CubePointY,CubePointZ,LineStartX,LineStartY,LineStartZ,LineEndX,LineEndY,LineEndZ,MaterialConstant,TargetDistance,ScaleX,TargetCompression,CompressionError";
+        string header = "Iteration,Round,Step,Phase,Pressure,Time,StepTime,Distance,Accuracy,CubePointX,CubePointY,CubePointZ,CubeX,CubeY,CubeZ,MaterialConstant,TargetDistance,ScaleX,TargetCompression,CompressionError";
         File.WriteAllText(csvFilePath, header + Environment.NewLine);
     }
 
@@ -94,7 +98,7 @@ public class ExperimentManager : MonoBehaviour
 
     private int GetTotalSteps()
     {
-        return currentRound == 0 ? 10 : 30;
+        return currentRound == 0 ? 10 : 60;
     }
 
     private void ProcessStateTransition()
@@ -135,32 +139,27 @@ public class ExperimentManager : MonoBehaviour
             return;
         }
 
-        if (currentStep > 0)
-        {
-            SelectRandomLine();
-        }
-        else
-        {
-            HideAllLines();
-        }
+        stepStartTime = Time.time; // Record the start time of the step
+
+        SelectRandomCube(); // Updated method name
         SetState(ExperimentState.LineAlignment);
     }
 
-    private void SelectRandomLine()
+    private void SelectRandomCube()
     {
-        HideAllLines();
-        int randomIndex = UnityEngine.Random.Range(0, lineRenderers.Length);
-        currentLine = lineRenderers[randomIndex].gameObject;
-        currentLine.SetActive(true);
+        HideAllCubes();
+        int randomIndex = UnityEngine.Random.Range(0, cubeObjects.Length);
+        currentCube = cubeObjects[randomIndex];
+        currentCube.SetActive(true);
 
         targetDistance = CalculateTargetDistance();
     }
 
-    private void HideAllLines()
+    private void HideAllCubes()
     {
-        foreach (var lineRenderer in lineRenderers)
+        foreach (var cube in cubeObjects)
         {
-            lineRenderer.gameObject.SetActive(false);
+            cube.SetActive(false);
         }
     }
 
@@ -168,20 +167,19 @@ public class ExperimentManager : MonoBehaviour
     {
         float pressure = pressureSensor.GetCurrentPressure();
         float time = Time.time;
+        float stepTime = time - stepStartTime; // Calculate the time taken for the step
         float distance = CalculateXAxisDistance(cubePoint.position);
         float accuracy = CalculateAccuracy(distance);
         Vector3 cubePointPosition = cubePoint.position;
-        Vector3 lineStartPoint = GetVisibleLineStartPoint();
-        Vector3 lineEndPoint = GetVisibleLineEndPoint();
+        Vector3 cubePosition = currentCube != null ? currentCube.transform.position : Vector3.zero;
         float scaleX = cube.transform.localScale.x;
         float targetCompression = GetTargetCompression();
         float compressionError = Mathf.Abs(targetCompression - scaleX);
 
         string phase = currentRound == 0 ? "Visual" : "NonVisual";
-        string dataLine = $"{experimentIteration},{currentRound + 1},{currentStep},{phase},{pressure},{time},{distance:F4},{accuracy:F2}," +
+        string dataLine = $"{experimentIteration},{currentRound + 1},{currentStep},{phase},{pressure},{time},{stepTime:F4},{distance:F4},{accuracy:F2}," +
                           $"{cubePointPosition.x},{cubePointPosition.y},{cubePointPosition.z}," +
-                          $"{lineStartPoint.x},{lineStartPoint.y},{lineStartPoint.z}," +
-                          $"{lineEndPoint.x},{lineEndPoint.y},{lineEndPoint.z}," +
+                          $"{cubePosition.x},{cubePosition.y},{cubePosition.z}," +
                           $"{materialConstant},{targetDistance:F4},{scaleX},{targetCompression:F5},{compressionError:F5}";
 
         File.AppendAllText(csvFilePath, dataLine + Environment.NewLine);
@@ -192,32 +190,24 @@ public class ExperimentManager : MonoBehaviour
 
     private float CalculateXAxisDistance(Vector3 point)
     {
-        if (currentLine == null)
+        if (currentCube == null)
             return -1f;
 
-        LineRenderer lineRenderer = currentLine.GetComponent<LineRenderer>();
-        if (lineRenderer == null || lineRenderer.positionCount < 2)
-            return -1f;
+        Vector3 cubePosition = currentCube.transform.position;
 
-        Vector3 lineStart = lineRenderer.GetPosition(0);
-
-        float distance = Mathf.Abs(point.x - lineStart.x);
+        float distance = Mathf.Abs(point.x - cubePosition.x);
 
         return distance;
     }
 
     private float CalculateTargetDistance()
     {
-        if (currentLine == null)
+        if (currentCube == null)
             return -1f;
 
-        LineRenderer lineRenderer = currentLine.GetComponent<LineRenderer>();
-        if (lineRenderer == null || lineRenderer.positionCount < 2)
-            return -1f;
+        Vector3 cubePosition = currentCube.transform.position;
 
-        Vector3 lineStart = lineRenderer.GetPosition(0);
-
-        float targetDistance = Mathf.Abs(refLineStartX - lineStart.x);
+        float targetDistance = Mathf.Abs(refLineStartX - cubePosition.x);
 
         return targetDistance;
     }
@@ -227,40 +217,18 @@ public class ExperimentManager : MonoBehaviour
         return Mathf.Max(0f, 100f * (1f - Mathf.Clamp01(distance / maxDistance)));
     }
 
-    private Vector3 GetVisibleLineStartPoint()
-    {
-        LineRenderer lineRenderer = currentLine?.GetComponent<LineRenderer>();
-        return lineRenderer != null ? lineRenderer.GetPosition(0) : Vector3.zero;
-    }
-
-    private Vector3 GetVisibleLineEndPoint()
-    {
-        LineRenderer lineRenderer = currentLine?.GetComponent<LineRenderer>();
-        return lineRenderer != null ? lineRenderer.GetPosition(lineRenderer.positionCount - 1) : Vector3.zero;
-    }
-
     private float GetTargetCompression()
     {
-        int lineIndex = Array.IndexOf(lineRenderers, currentLine?.GetComponent<LineRenderer>());
-        switch (lineIndex)
-        {
-            case 0: return 0.68794f;
-            case 1: return 0.66001f;
-            case 2: return 0.62448f;
-            case 3: return 0.57949f;
-            case 4: return 0.54304f;
-            case 5: return 0.49568f;
-            case 6: return 0.45790f;
-            case 7: return 0.42509f;
-            case 8: return 0.39034f;
-            case 9: return 0.34864f;
-            default: return -1f; // Or any other default value
-        }
+        int cubeIndex = Array.IndexOf(cubeObjects, currentCube);
+        if (cubeIndex >= 0 && cubeIndex < targetCompressions.Length)
+            return targetCompressions[cubeIndex];
+        else
+            return -1f;
     }
 
     private void CompleteRound()
     {
-        HideAllLines();
+        HideAllCubes();
         if (currentRound == 0)
         {
             currentRound++;
@@ -293,7 +261,7 @@ public class ExperimentManager : MonoBehaviour
 
         materialConstant = 2f;
         SetObjectsVisibility(true);
-        HideAllLines();
+        HideAllCubes();
         SetState(ExperimentState.DevicePress);
         UpdateStepAndRoundText();
         Debug.Log($"Starting new experiment iteration {experimentIteration} with material constant {materialConstant}");
