@@ -386,6 +386,8 @@
 "Assets/Scripts/ExperimentManager.cs"
 "Assets/Scripts/FingerController.cs"
 "Assets/Scripts/FingerDistanceCalculator.cs"
+"Assets/Scripts/New_BoxDeformer.cs"
+"Assets/Scripts/New_Exp_Manager.cs"
 "Assets/Scripts/PressureDisplay.cs"
 "Assets/Scripts/PressureSensor.cs"
 "Assets/Scripts/UDPReceiver.cs"

@@ -287,11 +287,11 @@ public class ExperimentManager : MonoBehaviour
 
             if (materialConstant == 1f)
             {
-                boxDeformer.SetMaxDeformation(0.6f);
+                boxDeformer.SetMaxDeformation(0.9f);
             }
             else if (materialConstant == 2f)
             {
-                boxDeformer.SetMaxDeformation(0.75f);
+                boxDeformer.SetMaxDeformation(0.9f);
             }
 
             // Update the material constant text

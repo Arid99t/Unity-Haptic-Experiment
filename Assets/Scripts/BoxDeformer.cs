@@ -6,8 +6,8 @@ public class BoxDeformer : MonoBehaviour
 {
     [SerializeField] private FingerController fingerController;
     [SerializeField] private Transform indexFingerTip;
-    [SerializeField] private float maxDeformation = 0.2f;
-    [SerializeField] private float widthExpansionFactor = 0.5f;
+    [SerializeField] private float maxDeformation = 0.96f;
+    [SerializeField] private float widthExpansionFactor = 0.96f;
     [SerializeField] private float smoothSpeed = 40f; // Adjust this to change overall responsiveness
     public Vector3 initialScale;
     private Vector3 initialPosition;
